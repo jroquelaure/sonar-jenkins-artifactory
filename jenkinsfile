@@ -1,0 +1,43 @@
+node() {
+    stage 'Build staging release'
+        git url: 'https://github.com/jroquelaure/frogsws.git', branch: 'sonar-demo'
+      
+    //sh './increment.sh'
+
+    stage 'Artifactory configuration' 
+     // Create an Artifactory server instance, as described above in this article:
+        def server = Artifactory.server('artifactory_local')
+    // Create and set an Artifactory Gradle Build instance:
+        def rtGradle = Artifactory.newGradleBuild()
+        rtGradle.resolver server: server, repo: 'gradle-dev'
+        rtGradle.deployer server: server, repo: 'gradle-dev-local'
+    // In case the Artifactory Gradle Plugin is already applied in your Gradle script:
+   //rtGradle.usesPlugin = false
+    // Set a Gradle Tool defined in Jenkins "Manage":
+    rtGradle.tool = 'GRADLE_TOOL'
+    stage 'Run Gradle and publish to Artifactory'
+    // Run Gradle:
+    
+    
+    def buildInfo = rtGradle.run rootDir: ".", buildFile: 'build.gradle', tasks: "clean sonarqube build artifactoryPublish --stacktrace".toString()
+   
+     // sh "export SONAR_CETASKID=$ceTaskId"
+    
+   // rtGradle.run rootDir: ".", buildFile: 'build.gradle', tasks: "clean sonarqube --stacktrace".toString()
+   
+    //sh "chmod +x artifactory-sonar.sh"
+    //sh  "export ARTIFACTORY_REPO='gradle-dev-local'; export ARTIFACTORY_URL='http://localhost:8081/artifactory'; export ARTIFACTORY_APIKEY='AKCp5bB3YhxXqcWTHyFksyqvpczd3Mx8uPepC8yfZFvPAsFcZ5AZrCmr2c3zWWT5DxsV6S9qU'; ./artifactory-sonar.sh" 
+    
+    def ceTaskId = sh(returnStdout: true, script: "cat build/sonar/report-task.txt | grep ceTaskId | cut -f2 -d'='").trim()
+    def dashboardUrl= sh(returnStdout: true, script: "cat build/sonar/report-task.txt | grep dashboardUrl | cut -f2 -d'='").trim()
+
+    env.SONAR_DASHBOARDURL=dashboardUrl
+    env.SONAR_CETASKID=ceTaskId
+    //sh "printenv"
+    //def buildInfo = rtGradle.run rootDir: ".", buildFile: 'build.gradle', tasks: "build artifactoryPublish --stacktrace".toString()
+    // Publish the build-info to Artifactory:
+    buildInfo.env.capture = true
+    buildInfo.env.collect()
+    server.publishBuildInfo buildInfo
+    
+}
